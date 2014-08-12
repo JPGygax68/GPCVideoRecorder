@@ -26,10 +26,10 @@ namespace gpc {
 
 	void Recorder::openFile(const std::string &filename, unsigned width_, unsigned rows_)
 	{
-		if (width_ != 0) width = width_;
-		if (rows_ != 0) rows = rows_;
+		if (width_ != 0) _width = width_;
+		if (rows_ != 0) _rows = rows_;
 
-		assert(width != 0 && rows != 0);
+		assert(_width != 0 && _rows != 0);
 
 		// TODO: offer choices
 		codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -39,11 +39,11 @@ namespace gpc {
 		if (!cctx) throw runtime_error("Unabled to allocate codec context");
 
 		// The following bit rate settings are intended to allow the codec to do anything it wants
-		cctx->bit_rate = 8 * 3 * width * rows / 2;
+		cctx->bit_rate = 8 * 3 * _width * _rows / 2;
 		cctx->bit_rate_tolerance = cctx->bit_rate;
 
-		cctx->width = width;
-		cctx->height = rows;
+		cctx->width = _width;
+		cctx->height = _rows;
 		cctx->time_base = framerate;
 		cctx->gop_size = 10;
 		cctx->max_b_frames = 1;
@@ -69,12 +69,12 @@ namespace gpc {
 
 		got_output = 0;
 
-		sws_ctx = sws_getContext(width, rows, AV_PIX_FMT_RGB24, width, rows, cctx->pix_fmt, 0, 0, 0, 0);
+		sws_ctx = sws_getContext(_width, _rows, AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 	}
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y)
 	{
-		std::vector<RGBValue> swap(width);
+		std::vector<RGBValue> swap(_width);
 
 		// Initialize video stream packet
 		av_init_packet(&pkt);
@@ -84,20 +84,20 @@ namespace gpc {
 		RGBValue *pixels = const_cast<RGBValue*>(reinterpret_cast<const RGBValue*>(pixels_));
 
 		if (flip_y) {
-			for (unsigned y = 0; y < rows / 2; y++) {
+			for (unsigned y = 0; y < _rows / 2; y++) {
 				// Copy "swap" row (from first half)
-				memcpy(&swap[0], &pixels[y * width], width * sizeof(RGBValue));
+				memcpy(&swap[0], &pixels[y * _width], _width * sizeof(RGBValue));
 				// Copy row in second half to first half
-				memcpy(&pixels[y * width], &pixels[(rows - y - 1) * width], width * sizeof(RGBValue));
+				memcpy(&pixels[y * _width], &pixels[(_rows - y - 1) * _width], _width * sizeof(RGBValue));
 				// Copy "swap" row to second half
-				memcpy(&pixels[(rows - y - 1) * width], &swap[0], width * sizeof(RGBValue));
+				memcpy(&pixels[(_rows - y - 1) * _width], &swap[0], _width * sizeof(RGBValue));
 			}
 		}
 
 		// Convert pixels to video frame
 		const uint8_t * inData[1] = { reinterpret_cast<const uint8_t*>(pixels) }; // RGB24 have one plane
-		int inLinesize[1] = { 3 * width }; // RGB stride
-		if (sws_scale(sws_ctx, inData, inLinesize, 0, rows, frame->data, frame->linesize) != rows)
+		int inLinesize[1] = { 3 * _width }; // RGB stride
+		if (sws_scale(sws_ctx, inData, inLinesize, 0, _rows, frame->data, frame->linesize) != _rows)
 			throw runtime_error("Software scaling returns incorrect slice height");
 
 		// Example image

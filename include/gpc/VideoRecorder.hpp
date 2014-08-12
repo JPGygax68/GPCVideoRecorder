@@ -30,10 +30,13 @@ namespace gpc {
 
 		void recordFrameFromRGB(const void *pixels, bool flip_y = true);
 
+        auto width() const -> unsigned { return _width; }
+        auto rows() const -> unsigned { return _rows; }
+
 	private:
 
 		FrameRate framerate;
-		unsigned width, rows;
+		unsigned _width, _rows;
 		AVCodec *codec;
 		AVCodecContext *cctx;
 		FILE *file;
