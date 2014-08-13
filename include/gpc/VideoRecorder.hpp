@@ -19,6 +19,7 @@ namespace gpc {
 		typedef AVRational FrameRate;
 
 		explicit Recorder();
+		~Recorder();
 
 		auto setFrameRate(unsigned num, unsigned denom)->Recorder &;
 
@@ -45,6 +46,7 @@ namespace gpc {
 		SwsContext *sws_ctx;
 		AVPacket pkt;
 		int got_output;
+		char errbuf[1024];
 	};
 
 } // ns gpc

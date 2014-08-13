@@ -18,6 +18,11 @@ namespace gpc {
 
 	}
 
+	Recorder::~Recorder()
+	{
+		if (file) closeFile();
+	}
+
 	auto Recorder::setFrameRate(unsigned num, unsigned den) -> Recorder &
 	{
 		framerate.num = num, framerate.den = den;
@@ -26,6 +31,8 @@ namespace gpc {
 
 	void Recorder::openFile(const std::string &filename, unsigned width_, unsigned rows_)
 	{
+		using std::string;
+
 		if (width_ != 0) _width = width_;
 		if (rows_ != 0) _rows = rows_;
 
@@ -37,13 +44,15 @@ namespace gpc {
 
 		cctx = avcodec_alloc_context3(codec);
 		if (!cctx) throw runtime_error("Unabled to allocate codec context");
+		memset(cctx, 0, sizeof(*cctx));
 
 		// The following bit rate settings are intended to allow the codec to do anything it wants
-		cctx->bit_rate = 8 * 3 * _width * _rows / 2;
+		cctx->bit_rate = 8 * 3 * _width * _rows * framerate.den / framerate.num / 2;
 		cctx->bit_rate_tolerance = cctx->bit_rate;
 
 		cctx->width = _width;
 		cctx->height = _rows;
+		cctx->codec_type = AVMEDIA_TYPE_VIDEO;
 		cctx->time_base = framerate;
 		cctx->gop_size = 10;
 		cctx->max_b_frames = 1;
@@ -63,7 +72,7 @@ namespace gpc {
 		frame->height = cctx->height;
 
 		int ret = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 32);
-		if (ret < 0) throw runtime_error("Failed to allocate raw picture buffer");
+		if (ret < 0) throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
 
 		frame_num = 0;
 
@@ -74,6 +83,8 @@ namespace gpc {
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y)
 	{
+		using std::string;
+
 		std::vector<RGBValue> swap(_width);
 
 		// Initialize video stream packet
@@ -119,7 +130,7 @@ namespace gpc {
 
 		// Encode the frame
 		int ret = avcodec_encode_video2(cctx, &pkt, frame, &got_output);
-		if (ret < 0) throw runtime_error("Failed to encode the frame");
+		if (ret < 0) throw runtime_error(string("Failed to encode the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
 		if (got_output) {
 			fwrite(pkt.data, 1, pkt.size, file);
 			av_free_packet(&pkt);
@@ -149,6 +160,8 @@ namespace gpc {
 		av_free(cctx);
 		av_freep(&frame->data[0]);
 		av_frame_free(&frame);
+
+		file = nullptr;
 	}
 
 } // ns gpc
