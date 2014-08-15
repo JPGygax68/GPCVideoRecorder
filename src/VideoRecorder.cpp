@@ -47,14 +47,14 @@ namespace gpc {
 		memset(cctx, 0, sizeof(*cctx));
 
 		// The following bit rate settings are intended to allow the codec to do anything it wants
-		cctx->bit_rate = 8 * 3 * _width * _rows * framerate.den / framerate.num / 2;
-		cctx->bit_rate_tolerance = cctx->bit_rate;
+		cctx->bit_rate = 8 * 3 * _width * _rows * framerate.den / framerate.num / 4;
+		cctx->bit_rate_tolerance = cctx->bit_rate / 2;
 
 		cctx->width = _width;
 		cctx->height = _rows;
 		cctx->codec_type = AVMEDIA_TYPE_VIDEO;
 		cctx->time_base = framerate;
-		cctx->gop_size = 10;
+		cctx->gop_size = 0; // 10;
 		cctx->max_b_frames = 1;
 		cctx->pix_fmt = AV_PIX_FMT_YUV420P; // TODO: offer choices
 
@@ -71,7 +71,7 @@ namespace gpc {
 		frame->width = cctx->width;
 		frame->height = cctx->height;
 
-		int ret = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 32);
+		int ret = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 1);
 		if (ret < 0) throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
 
 		frame_num = 0;
@@ -130,8 +130,10 @@ namespace gpc {
 
 		// Encode the frame
 		int ret = avcodec_encode_video2(cctx, &pkt, frame, &got_output);
-		if (ret < 0) throw runtime_error(string("Failed to encode the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
-		if (got_output) {
+		if (ret < 0) {
+			// throw runtime_error(string("Failed to encode the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
+		}
+		else if (got_output) {
 			fwrite(pkt.data, 1, pkt.size, file);
 			av_free_packet(&pkt);
 		}
@@ -145,15 +147,17 @@ namespace gpc {
 		// Get the delayed frames
 		for (got_output = 1; got_output; frame_num++) {
 			int ret = avcodec_encode_video2(cctx, &pkt, nullptr, &got_output);
-			if (ret < 0) throw runtime_error("Error encoding frame");
-			if (got_output) {
+			if (ret < 0) {
+				//throw runtime_error("Error encoding frame");
+			}
+			else if (got_output) {
 				fwrite(pkt.data, 1, pkt.size, file);
 				av_free_packet(&pkt);
 			}
 		}
 
 		/* add sequence end code to have a real mpeg file */
-		//fwrite(endcode, 1, sizeof(endcode), file); // VideoLAN doesn't complain when this is absent
+		fwrite(endcode, 1, sizeof(endcode), file); // VideoLAN doesn't complain when this is absent
 		fclose(file);
 		sws_freeContext(sws_ctx);
 		avcodec_close(cctx);
