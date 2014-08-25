@@ -9,6 +9,11 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+
+#ifdef USE_LIBX264
+#include <x264.h>
+#endif
+
 }
 
 namespace gpc {
@@ -38,10 +43,19 @@ namespace gpc {
 
 		FrameRate framerate;
 		unsigned _width, _rows;
-		AVCodec *codec;
-		AVCodecContext *cctx;
-		FILE *file;
-		AVFrame *frame;
+		FILE *fp;
+#ifdef USE_LIBX264
+        x264_picture_t pic_in, pic_out;
+        x264_param_t params;
+        x264_t *encoder;
+        x264_nal_t *nals;
+        AVPicture pic_raw;
+        int num_nals;
+#else
+        AVCodec *codec;
+        AVCodecContext *cctx;
+        AVFrame *frame;
+#endif
 		int frame_num;
 		SwsContext *sws_ctx;
 		AVPacket pkt;

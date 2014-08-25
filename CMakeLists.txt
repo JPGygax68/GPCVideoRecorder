@@ -6,10 +6,12 @@ cmake_minimum_required(VERSION 3.0)
 
 project(GPCVideoRecorder)
 
-set(LSApplication_MAJOR_VERSION 0)
-set(LSApplication_MINOR_VERSION 1)
-set(LSApplication_PATCH_VERSION 0)
-set(LSApplication_VERSION ${${PROJECT_NAME}_MAJOR_VERSION}.${${PROJECT_NAME}_MINOR_VERSION}.${${PROJECT_NAME}_PATCH_VERSION})
+set(${PROJECT_NAME}_MAJOR_VERSION 0)
+set(${PROJECT_NAME}_MINOR_VERSION 1)
+set(${PROJECT_NAME}_PATCH_VERSION 0)
+set(${PROJECT_NAME}_VERSION ${${PROJECT_NAME}_MAJOR_VERSION}.${${PROJECT_NAME}_MINOR_VERSION}.${${PROJECT_NAME}_PATCH_VERSION})
+
+set(${PROJECT_NAME}_DEFINITIONS "-DUSE_LIBX264")
 
 #------------------------------------------------
 # Special settings
@@ -61,14 +63,16 @@ foreach (HEADER ${PUBLIC_HEADERS})
 endforeach()
 
 add_library( ${PROJECT_NAME} STATIC
-  src/VideoRecorder.cpp
-  include/gpc/VideoRecorder.hpp
+  src/VideoRecorder.cpp			# src/X264Encoder.cpp
+  include/gpc/VideoRecorder.hpp # src/X264Encoder.h
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC 
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<INSTALL_INTERFACE:include>
 )
+
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}_DEFINITIONS})
 
 set_target_properties( ${PROJECT_NAME}
   PROPERTIES
@@ -93,8 +97,13 @@ find_path(avutil_INCLUDE libavutil/avutil.h)
 find_library(swscale_LIB swscale)
 find_path(swscale_INCLUDE libswscale/swscale.h)
 
-target_link_libraries(${PROJECT_NAME} ${avformat_LIB} ${avcodec_LIB} ${avutil_LIB} ${swscale_LIB})
-target_include_directories(${PROJECT_NAME} PUBLIC ${avformat_INCLUDE} ${avcodec_INCLUDE} ${avutil_INCLUDE} ${swscale_INCLUDE})
+find_library(x264_LIB libx264)
+#message("x264_LIB: " ${x264_LIB})
+find_path(x264_INCLUDE x264.h)
+#message("x264_INCLUDE: " ${x264_INCLUDE})
+
+target_link_libraries(${PROJECT_NAME} ${avformat_LIB} ${avcodec_LIB} ${avutil_LIB} ${swscale_LIB} ${x264_LIB})
+target_include_directories(${PROJECT_NAME} PUBLIC ${avformat_INCLUDE} ${avcodec_INCLUDE} ${avutil_INCLUDE} ${swscale_INCLUDE} ${x264_INCLUDE})
 target_compile_definitions(${PROJECT_NAME} PRIVATE __STDC_CONSTANT_MACROS)
 
 # Requires disabling of "SAFESEH"

@@ -1,0 +1,4 @@
+2014-08-25
+==========
+
+- TODO: CMake: find a way to make the required MingGW static libraries available to consumers.
