@@ -115,6 +115,22 @@ else()
 endif()
 get_target_property(link_flags ${PROJECT_NAME} LINK_FLAGS)
 
+# Special case: we need libraries that, on Windows, come from MinGW, so the native search rules
+# won't be able to find them there.
+list(APPEND CMAKE_FIND_LIBRARY_PREFIXES "lib")
+list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_PREFIXES)
+list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_SUFFIXES)
+
+find_library(gcc_LIB gcc)
+#message("gcc_LIB: " ${gcc_LIB})
+target_link_libraries(${PROJECT_NAME} ${gcc_LIB})
+
+find_library(mingwex_LIB mingwex)
+#message("mingwex_LIB: " ${mingwex_LIB})
+target_link_libraries(${PROJECT_NAME} ${mingwex_LIB})
+
+
 #------------------------------------------------
 # Exporting
 #
