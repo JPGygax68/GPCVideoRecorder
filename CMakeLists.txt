@@ -83,6 +83,12 @@ set_target_properties( ${PROJECT_NAME}
 # Libraries
 #
 
+# For libraries originating from the other side of the cultural divide:
+list(APPEND CMAKE_FIND_LIBRARY_PREFIXES "lib")
+list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_PREFIXES)
+list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_SUFFIXES)
+
 # FFMPEG library
 
 # This search only works if the .lib and .h files have been installed in "sensible" locations
@@ -110,17 +116,10 @@ else()
 endif()
 get_target_property(link_flags ${PROJECT_NAME} LINK_FLAGS)
 
-# LibX264 library
+# LibX264 library + dependencies
 
-find_library(x264_LIB libx264)
+find_library(x264_LIB x264)
 find_path(x264_INCLUDE x264.h)
-
-# Special case: LibX264 needs libraries that, on Windows, come from MinGW, so the native 
-# search rules won't be able to find them there (looking for wrong extension ".lib").
-list(APPEND CMAKE_FIND_LIBRARY_PREFIXES "lib")
-list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_PREFIXES)
-list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_SUFFIXES)
 
 find_library(gcc_LIB gcc)
 target_link_libraries(${PROJECT_NAME} ${gcc_LIB})
