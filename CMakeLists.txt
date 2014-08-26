@@ -97,11 +97,6 @@ find_path(avutil_INCLUDE libavutil/avutil.h)
 find_library(swscale_LIB swscale)
 find_path(swscale_INCLUDE libswscale/swscale.h)
 
-find_library(x264_LIB libx264)
-#message("x264_LIB: " ${x264_LIB})
-find_path(x264_INCLUDE x264.h)
-#message("x264_INCLUDE: " ${x264_INCLUDE})
-
 target_link_libraries(${PROJECT_NAME} ${avformat_LIB} ${avcodec_LIB} ${avutil_LIB} ${swscale_LIB} ${x264_LIB})
 target_include_directories(${PROJECT_NAME} PUBLIC ${avformat_INCLUDE} ${avcodec_INCLUDE} ${avutil_INCLUDE} ${swscale_INCLUDE} ${x264_INCLUDE})
 target_compile_definitions(${PROJECT_NAME} PRIVATE __STDC_CONSTANT_MACROS)
@@ -115,21 +110,23 @@ else()
 endif()
 get_target_property(link_flags ${PROJECT_NAME} LINK_FLAGS)
 
-# Special case: we need libraries that, on Windows, come from MinGW, so the native search rules
-# won't be able to find them there.
+# LibX264 library
+
+find_library(x264_LIB libx264)
+find_path(x264_INCLUDE x264.h)
+
+# Special case: LibX264 needs libraries that, on Windows, come from MinGW, so the native 
+# search rules won't be able to find them there (looking for wrong extension ".lib").
 list(APPEND CMAKE_FIND_LIBRARY_PREFIXES "lib")
 list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_PREFIXES)
 list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 list(REMOVE_DUPLICATES CMAKE_FIND_LIBRARY_SUFFIXES)
 
 find_library(gcc_LIB gcc)
-#message("gcc_LIB: " ${gcc_LIB})
 target_link_libraries(${PROJECT_NAME} ${gcc_LIB})
 
 find_library(mingwex_LIB mingwex)
-#message("mingwex_LIB: " ${mingwex_LIB})
 target_link_libraries(${PROJECT_NAME} ${mingwex_LIB})
-
 
 #------------------------------------------------
 # Exporting
