@@ -53,14 +53,24 @@ namespace gpc {
         
         x264_picture_alloc(&pic_in, X264_CSP_I420, _width, _rows);
 
-        x264_param_default_preset(&params, "medium", "film"); // TODO: provide a way to make this customizable
+        x264_param_default_preset(&params, "ultrafast", "zerolatency"); // TODO: provide a way to make this customizable
         params.i_threads = 8;
         params.i_width = _width;
         params.i_height = _rows;
         params.i_fps_num = framerate.num;
         params.i_fps_den = framerate.den;
+		params.i_keyint_max = framerate.num;
+		params.b_intra_refresh = 1;
+		params.rc.i_rc_method = X264_RC_CRF;
+		params.rc.f_rf_constant = 25;
+		params.rc.f_rf_constant_max = 35;
+		params.b_annexb = 1;
+		params.b_repeat_headers = 1;
+		params.i_log_level = X264_LOG_DEBUG;
 
-        // create the encoder using our params
+		x264_param_apply_profile(&params, "baseline");
+
+		// create the encoder using our params
         encoder = x264_encoder_open(&params);
         if (!encoder) throw std::runtime_error("Cannot open the encoder");
 
@@ -69,12 +79,12 @@ namespace gpc {
         int r = x264_encoder_headers(encoder, &nals, &nheader);
         if (r < 0) throw std::runtime_error("x264_encoder_headers() failed"); // TODO: report error code/string
 
-        // nals[2] seems to be uninitialized, leading to a random value for header_size
-        //int header_size = nals[0].i_payload + nals[1].i_payload + nals[2].i_payload;
-        int header_size = 0;
+#ifdef NOT_DEFINED
+		// nals[2] seems to be uninitialized, leading to a random value for header_size
+		int header_size = 0;
         for (int i = 0; i < nheader; i++) header_size += nals[i].i_payload;
-
         if (!fwrite(nals[0].p_payload, header_size, 1, fp)) throw std::runtime_error("Cannot write headers");
+#endif
 
 #else // USE_LIBX264
 
@@ -144,18 +154,21 @@ namespace gpc {
 
         // copy the pixels into our "raw input" container.
         int bytes_filled = avpicture_fill(&pic_raw, (uint8_t*)pixels, AV_PIX_FMT_RGB24, _width, _rows);
-        if (!bytes_filled) throw std::runtime_error("Cannot fill the raw input buffer");
+		if (!bytes_filled) throw std::runtime_error("Cannot fill the raw input buffer");
 
         // convert to I420 for x264
         int h = sws_scale(sws_ctx, pic_raw.data, pic_raw.linesize, 0, _rows, pic_in.img.plane, pic_in.img.i_stride);
-        if (h != _rows) throw std::runtime_error("scale failed");
+		if (h != _rows) throw std::runtime_error("scale failed");
 
         // and encode and store into pic_out
         pic_in.i_pts = frame_num;
 
         int frame_size = x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out);
-        if (frame_size) {
-            if(!fwrite(nals[0].p_payload, frame_size, 1, fp)) throw std::runtime_error("Error while trying to write nal");
+		if (frame_size < 0) 
+			throw std::runtime_error("Failed to encode the frame");
+        if (frame_size > 0) {
+            if (!fwrite(nals[0].p_payload, frame_size, 1, fp)) 
+				throw std::runtime_error("Error while trying to write nal");
         }
 
 #else
