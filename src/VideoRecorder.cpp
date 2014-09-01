@@ -13,9 +13,9 @@ namespace gpc {
 
 	Recorder::Recorder() : 
 #ifdef USE_LIBX264
-        encoder(nullptr), nals(nullptr),
+        encoder(nullptr), nals(nullptr), num_nals(0),
 #else
-        codec(nullptr), cctx(nullptr), frame(nullptr), num_nals(0)
+        codec(nullptr), cctx(nullptr), frame(nullptr),
 #endif
         fp(nullptr), frame_num(-1), sws_ctx(nullptr), got_output(0), framerate({ 1, 50 })
 	{
@@ -40,6 +40,9 @@ namespace gpc {
 	void Recorder::openFile(const std::string &filename, unsigned width_, unsigned rows_)
 	{
 		using std::string;
+
+        int err = 0;
+        char errbuf[256];
 
 		if (width_ != 0) _width = width_;
 		if (rows_ != 0) _rows = rows_;
@@ -89,8 +92,8 @@ namespace gpc {
 #else // USE_LIBX264
 
         // TODO: offer choices
-        codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-        if (!codec) throw runtime_error("Unabled to find H264 encoder");
+        codec = avcodec_find_encoder(AV_CODEC_ID_MJPEG); // AV_CODEC_ID_H264);
+        if (!codec) throw runtime_error("Unabled to find encoder");
 
         cctx = avcodec_alloc_context3(codec);
         if (!cctx) throw runtime_error("Unabled to allocate codec context");
@@ -106,11 +109,13 @@ namespace gpc {
         cctx->time_base = framerate;
         cctx->gop_size = 0; // 10;
         cctx->max_b_frames = 1;
-        cctx->pix_fmt = AV_PIX_FMT_YUV420P; // TODO: offer choices
+        cctx->bit_rate = 15000000;
+        cctx->pix_fmt = AV_PIX_FMT_YUV422P; // AV_PIX_FMT_YUV420P; // TODO: offer choices
 
         av_opt_set(cctx->priv_data, "preset", "slow", 0); // specific to H264
 
-        if (avcodec_open2(cctx, codec, nullptr) < 0) throw runtime_error("Unable to open codec");
+        if ((err = avcodec_open2(cctx, codec, nullptr)) < 0)
+            throw runtime_error(std::string("Unable to open codec ") + av_make_error_string(errbuf, sizeof(errbuf), err));
 
         frame = av_frame_alloc();
 		if (!frame) throw runtime_error("Failed to allocate AV frame");
@@ -238,17 +243,19 @@ namespace gpc {
         memset(&pic_raw, 0, sizeof(pic_raw));
 
 #else
-		// Get the delayed frames
-		for (got_output = 1; got_output; frame_num++) {
-			int ret = avcodec_encode_video2(cctx, &pkt, nullptr, &got_output);
-			if (ret < 0) {
-				//throw runtime_error("Error encoding frame");
-			}
-			else if (got_output) {
-				fwrite(pkt.data, 1, pkt.size, fp);
-				av_free_packet(&pkt);
-			}
-		}
+        if (frame) {
+            // Get the delayed frames
+            for (got_output = 1; got_output; frame_num++) {
+                int ret = avcodec_encode_video2(cctx, &pkt, nullptr, &got_output);
+                if (ret < 0) {
+                    throw runtime_error("Error encoding frame");
+                }
+                else if (got_output) {
+                    fwrite(pkt.data, 1, pkt.size, fp);
+                    av_free_packet(&pkt);
+                }
+            }
+        }
 
 		/* add sequence end code to have a real mpeg fp */
 		fwrite(endcode, 1, sizeof(endcode), fp); // VideoLAN doesn't complain when this is absent
@@ -256,7 +263,7 @@ namespace gpc {
 		sws_freeContext(sws_ctx);
 		avcodec_close(cctx);
 		av_free(cctx);
-		av_freep(&frame->data[0]);
+		if (frame) av_freep(&frame->data[0]);
 		av_frame_free(&frame);
 #endif
 		fp = nullptr;
