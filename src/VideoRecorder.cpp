@@ -54,12 +54,17 @@ namespace gpc {
 
 #ifdef USE_LIBX264
         
-        x264_picture_alloc(&pic_in, X264_CSP_I420, _width, _rows);
+		unsigned aligned_width  = 4 * ((_width + 3) / 4);
+		unsigned aligned_height = 4 * ((_rows  + 3) / 4);
+        x264_picture_alloc(&pic_in, X264_CSP_I420, aligned_width, aligned_height);
+		pic_in.i_type = X264_TYPE_AUTO;
+		pic_in.i_qpplus1 = 0; //frame qp adjustment
 
-        x264_param_default_preset(&params, "ultrafast", "zerolatency"); // TODO: provide a way to make this customizable
-        params.i_threads = 8;
-        params.i_width = _width;
-        params.i_height = _rows;
+		//x264_param_default_preset(&params, "ultrafast", "zerolatency"); // TODO: provide a way to make this customizable
+		x264_param_default_preset(&params, "medium", "film");
+        params.i_threads = 1;
+		params.i_width = aligned_width; // _width;
+		params.i_height = aligned_height; // _rows;
         params.i_fps_num = framerate.num;
         params.i_fps_den = framerate.den;
 		params.i_keyint_max = framerate.num;
@@ -126,13 +131,14 @@ namespace gpc {
 		int ret = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 1);
 		if (ret < 0) throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
 
+		got_output = 0;
+
 #endif
 
 		frame_num = 0;
 
-		got_output = 0;
-
         sws_ctx = sws_getContext(_width, _rows, AV_PIX_FMT_RGB24, _width, _rows, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+		if (!sws_ctx) throw std::runtime_error("failed to obtain software scaler context");
 	}
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y)
@@ -169,6 +175,7 @@ namespace gpc {
         pic_in.i_pts = frame_num;
 
         int frame_size = x264_encoder_encode(encoder, &nals, &num_nals, &pic_in, &pic_out);
+
 		if (frame_size < 0) 
 			throw std::runtime_error("Failed to encode the frame");
         if (frame_size > 0) {
