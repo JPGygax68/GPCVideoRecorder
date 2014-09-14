@@ -62,7 +62,7 @@ namespace gpc {
 
 		//x264_param_default_preset(&params, "ultrafast", "zerolatency"); // TODO: provide a way to make this customizable
 		x264_param_default_preset(&params, "medium", "film");
-        params.i_threads = 1;
+        params.i_threads = 8;
 		params.i_width = aligned_width; // _width;
 		params.i_height = aligned_height; // _rows;
         params.i_fps_num = framerate.num;

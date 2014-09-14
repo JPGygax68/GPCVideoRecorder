@@ -114,6 +114,7 @@ else()
 endif()
 get_target_property(link_flags ${PROJECT_NAME} LINK_FLAGS)
 
+if (0)
 # LibX264 library + dependencies
 
 find_library(x264_LIB libx264)
@@ -124,6 +125,13 @@ target_link_libraries(${PROJECT_NAME} ${gcc_LIB})
 
 find_library(mingwex_LIB libmingwex)
 target_link_libraries(${PROJECT_NAME} ${mingwex_LIB})
+endif()
+
+find_library(x264_LIB libx264 HINTS ${CMAKE_SOURCE_DIR}/msvc32/lib)
+find_path(x264_INCLUDE x264.h HINTS ${CMAKE_SOURCE_DIR}/msvc32/include)
+message("x264_INCLUDE: ${x264_INCLUDE}")
+target_link_libraries(${PROJECT_NAME} ${x264_LIB})
+target_include_directories(${PROJECT_NAME} PUBLIC ${x264_INCLUDE})
 
 #------------------------------------------------
 # Exporting
