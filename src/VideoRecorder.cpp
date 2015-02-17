@@ -10,17 +10,18 @@ static const uint8_t endcode[] = { 0, 0, 1, 0xb7 };
 
 namespace gpc {
 
-	Recorder::Recorder()
-		: codec(nullptr), cctx(nullptr), file(nullptr), frame(nullptr), frame_num(-1), sws_ctx(nullptr), got_output(0), framerate({ 1, 25 })
+    Recorder::Recorder() : 
+        framerate({ 1, 25 }),
+        codec(nullptr), fctx(nullptr), cctx(nullptr), avio_ctx(nullptr), sws_ctx(nullptr),
+        /*file(nullptr),*/ frame(nullptr), frame_num(-1), got_output(0)
 	{
 		// TODO: is it ok to call av_register_xxx() multiple times ?
 		av_register_all(); // TODO: av_register_output_format() instead ?
-
 	}
 
 	Recorder::~Recorder()
 	{
-		if (file) close();
+		//if (file) close();
 	}
 
 	auto Recorder::setFrameRate(const FrameRate &fr) -> Recorder &
@@ -32,6 +33,7 @@ namespace gpc {
 	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_)
 	{
 		using std::string;
+        int err = 0;
 
 		if (width_ != 0) _width = width_;
 		if (rows_ != 0) _rows = rows_;
@@ -42,7 +44,11 @@ namespace gpc {
 		codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 		if (!codec) throw runtime_error("Unabled to find H264 encoder");
 
-		cctx = avcodec_alloc_context3(codec);
+        //fctx = avformat_alloc_context();
+        //fctx->oformat = av_guess_format(filename.c_str(), nullptr, nullptr);
+        //filename.copy(fctx->filename, filename.size(), 0);
+        
+        cctx = avcodec_alloc_context3(codec);
 		if (!cctx) throw runtime_error("Unabled to allocate codec context");
 		memset(cctx, 0, sizeof(*cctx));
 
@@ -62,8 +68,10 @@ namespace gpc {
 
 		if (avcodec_open2(cctx, codec, nullptr) < 0) throw runtime_error("Unable to open codec");
 
-		file = fopen(filename.c_str(), "wb");
-		if (!file) throw runtime_error("Unable to open output video file");
+		//file = fopen(filename.c_str(), "wb");
+		//if (!file) throw runtime_error("Unable to open output video file");
+        if ((err = avio_open(&avio_ctx, filename.c_str(), AVIO_FLAG_WRITE)))
+            throw runtime_error(string("Failed to open output stream: ") + av_make_error_string(errbuf, sizeof(errbuf), err));
 
 		frame = av_frame_alloc();
 		if (!frame) throw runtime_error("Failed to allocate AV frame");
@@ -71,8 +79,8 @@ namespace gpc {
 		frame->width = cctx->width;
 		frame->height = cctx->height;
 
-		int ret = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 1);
-		if (ret < 0) throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
+		err = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 1);
+		if (err < 0) throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), err));
 
 		frame_num = 0;
 
@@ -91,6 +99,7 @@ namespace gpc {
 		av_init_packet(&pkt);
 		pkt.data = nullptr;    // packet data will be allocated by the encoder
 		pkt.size = 0;
+        pkt.pts = pkt.dts = timestamp;
 
 		RGBValue *pixels = const_cast<RGBValue*>(reinterpret_cast<const RGBValue*>(pixels_));
 
@@ -134,7 +143,10 @@ namespace gpc {
 			// throw runtime_error(string("Failed to encode the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
 		}
 		else if (got_output) {
-			fwrite(pkt.data, 1, pkt.size, file);
+            //if ((ret = av_write_frame(fctx, &pkt)) < 0)
+            //    throw std::runtime_error(std::string("Failed to write the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
+            //fwrite(pkt.data, 1, pkt.size, file);
+            avio_write(avio_ctx, pkt.data, pkt.size);
 			av_free_packet(&pkt);
 		}
 
@@ -151,21 +163,25 @@ namespace gpc {
 				//throw runtime_error("Error encoding frame");
 			}
 			else if (got_output) {
-				fwrite(pkt.data, 1, pkt.size, file);
-				av_free_packet(&pkt);
+                //if ((ret = av_write_frame(fctx, &pkt)) < 0)
+                //    throw std::runtime_error(std::string("Failed to write the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
+                //fwrite(pkt.data, 1, pkt.size, file);
+                avio_write(avio_ctx, pkt.data, pkt.size);
+                av_free_packet(&pkt);
 			}
 		}
 
 		/* add sequence end code to have a real mpeg file */
-		fwrite(endcode, 1, sizeof(endcode), file); // VideoLAN doesn't complain when this is absent
-		fclose(file);
-		sws_freeContext(sws_ctx);
+		//fwrite(endcode, 1, sizeof(endcode), file); // VideoLAN doesn't complain when this is absent
+		//fclose(file);
+        //file = nullptr;
+        avio_closep(&avio_ctx);
+        sws_freeContext(sws_ctx);
 		avcodec_close(cctx);
 		av_free(cctx);
 		av_freep(&frame->data[0]);
 		av_frame_free(&frame);
 
-		file = nullptr;
 	}
 
 } // ns gpc

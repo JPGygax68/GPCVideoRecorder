@@ -39,11 +39,13 @@ namespace gpc {
 		FrameRate framerate;
 		unsigned _width, _rows;
 		AVCodec *codec;
+        AVFormatContext *fctx;
 		AVCodecContext *cctx;
-		FILE *file;
+		//FILE *file;
 		AVFrame *frame;
 		int frame_num;
 		SwsContext *sws_ctx;
+        AVIOContext *avio_ctx;
 		AVPacket pkt;
 		int got_output;
 		char errbuf[1024];
