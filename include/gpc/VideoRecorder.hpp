@@ -21,15 +21,15 @@ namespace gpc {
 		explicit Recorder();
 		~Recorder();
 
-		auto setFrameRate(unsigned num, unsigned denom)->Recorder &;
+		auto setFrameRate(const FrameRate &framerate) -> Recorder &;
 
-		void openFile(const std::string &filename, unsigned width = 0, unsigned height = 0);
+		void open(const std::string &filename, unsigned width = 0, unsigned height = 0);
 
-		void closeFile();
+		void close();
 
 		auto currentFrameNum() const -> int { return frame_num; }
 
-		void recordFrameFromRGB(const void *pixels, bool flip_y = true);
+        void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
 
         auto width() const -> unsigned { return _width; }
         auto rows() const -> unsigned { return _rows; }

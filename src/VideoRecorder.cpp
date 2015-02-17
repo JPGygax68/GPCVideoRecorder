@@ -11,7 +11,7 @@ static const uint8_t endcode[] = { 0, 0, 1, 0xb7 };
 namespace gpc {
 
 	Recorder::Recorder()
-		: codec(nullptr), cctx(nullptr), file(nullptr), frame(nullptr), frame_num(-1), sws_ctx(nullptr), got_output(0), framerate({ 1, 50 })
+		: codec(nullptr), cctx(nullptr), file(nullptr), frame(nullptr), frame_num(-1), sws_ctx(nullptr), got_output(0), framerate({ 1, 25 })
 	{
 		// TODO: is it ok to call av_register_xxx() multiple times ?
 		av_register_all(); // TODO: av_register_output_format() instead ?
@@ -20,16 +20,16 @@ namespace gpc {
 
 	Recorder::~Recorder()
 	{
-		if (file) closeFile();
+		if (file) close();
 	}
 
-	auto Recorder::setFrameRate(unsigned num, unsigned den) -> Recorder &
+	auto Recorder::setFrameRate(const FrameRate &fr) -> Recorder &
 	{
-		framerate.num = num, framerate.den = den;
+		framerate = fr;
 		return *this;
 	}
 
-	void Recorder::openFile(const std::string &filename, unsigned width_, unsigned rows_)
+	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_)
 	{
 		using std::string;
 
@@ -81,7 +81,7 @@ namespace gpc {
 		sws_ctx = sws_getContext(_width, _rows, AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 	}
 
-	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y)
+	void Recorder::recordFrameFromRGB(const void *pixels_, int64_t timestamp, bool flip_y)
 	{
 		using std::string;
 
@@ -126,7 +126,7 @@ namespace gpc {
 			}
 		}
 
-		frame->pts = frame_num;
+		frame->pts = timestamp; // frame_num;
 
 		// Encode the frame
 		int ret = avcodec_encode_video2(cctx, &pkt, frame, &got_output);
@@ -142,10 +142,10 @@ namespace gpc {
 		frame_num++;
 	}
 
-	void Recorder::closeFile()
+	void Recorder::close()
 	{
 		// Get the delayed frames
-		for (got_output = 1; got_output; frame_num++) {
+		for (; got_output; frame_num++) {
 			int ret = avcodec_encode_video2(cctx, &pkt, nullptr, &got_output);
 			if (ret < 0) {
 				//throw runtime_error("Error encoding frame");
