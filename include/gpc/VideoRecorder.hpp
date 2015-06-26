@@ -29,14 +29,18 @@ namespace gpc {
 
 		auto currentFrameNum() const -> int { return frame_num; }
 
-        void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
+        //void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
+        void recordFrameFromRGB(const void *pixels, bool flip_y = true);
 
-        auto width() const -> unsigned { return _width; }
-        auto rows() const -> unsigned { return _rows; }
+        //void pause();
+        //void resume();
+
+        auto width () const -> unsigned { return cctx->width; }
+        auto height() const -> unsigned { return cctx->height; }
 
 	private:
 
-		FrameRate framerate;
+        FrameRate framerate;
 		unsigned _width, _rows;
 		AVCodec *codec;
         AVFormatContext *fctx;
@@ -48,6 +52,7 @@ namespace gpc {
         AVIOContext *avio_ctx;
 		AVPacket pkt;
 		int got_output;
+
 		char errbuf[1024];
 	};
 

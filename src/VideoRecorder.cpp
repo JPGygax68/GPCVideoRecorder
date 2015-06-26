@@ -83,7 +83,7 @@ namespace gpc {
 		sws_ctx = sws_getContext(_width, _rows, AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 	}
 
-	void Recorder::recordFrameFromRGB(const void *pixels_, int64_t timestamp, bool flip_y)
+	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
 	{
 		using std::string;
 
@@ -93,7 +93,7 @@ namespace gpc {
 		av_init_packet(&pkt);
 		pkt.data = nullptr;    // packet data will be allocated by the encoder
 		pkt.size = 0;
-        pkt.pts = pkt.dts = timestamp;
+        //pkt.pts = pkt.dts = timestamp;
 
 		RGBValue *pixels = const_cast<RGBValue*>(reinterpret_cast<const RGBValue*>(pixels_));
 
@@ -129,7 +129,7 @@ namespace gpc {
 			}
 		}
 
-		frame->pts = timestamp; // frame_num;
+		// frame->pts = timestamp; // frame_num;
 
 		// Encode the frame
 		int ret = avcodec_encode_video2(cctx, &pkt, frame, &got_output);
