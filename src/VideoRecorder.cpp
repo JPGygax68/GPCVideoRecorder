@@ -93,7 +93,7 @@ namespace gpc {
 		av_init_packet(&pkt);
 		pkt.data = nullptr;    // packet data will be allocated by the encoder
 		pkt.size = 0;
-        //pkt.pts = pkt.dts = timestamp;
+        pkt.pts = pkt.dts = 0; // the timestamp does not appear to be necessary when streaming
 
 		RGBValue *pixels = const_cast<RGBValue*>(reinterpret_cast<const RGBValue*>(pixels_));
 
