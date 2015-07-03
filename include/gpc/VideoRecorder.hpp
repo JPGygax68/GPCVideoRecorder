@@ -32,7 +32,7 @@ namespace gpc {
 
         //void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
         void recordFrameFromRGB(const void *pixels, bool flip_y = true);
-        void recordFrameFromRGBA(const void *pixels, bool flip_y = true);
+        void recordFrameFromBGRA(const void *pixels, bool flip_y = true);
 
         //void pause();
         //void resume();

@@ -80,7 +80,7 @@ namespace gpc {
 
 		got_output = 0;
 
-		sws_ctx = sws_getContext(_width, _rows, rgba ? AV_PIX_FMT_RGB32 : AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
+		sws_ctx = sws_getContext(_width, _rows, rgba ? AV_PIX_FMT_BGR32 : AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 	}
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
@@ -145,7 +145,7 @@ namespace gpc {
 		frame_num++;
 	}
 
-    void Recorder::recordFrameFromRGBA(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
+    void Recorder::recordFrameFromBGRA(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
     {
         using std::string;
 
