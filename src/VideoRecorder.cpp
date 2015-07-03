@@ -30,7 +30,7 @@ namespace gpc {
 		return *this;
 	}
 
-	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_)
+	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_, bool rgba)
 	{
 		using std::string;
         int err = 0;
@@ -80,7 +80,7 @@ namespace gpc {
 
 		got_output = 0;
 
-		sws_ctx = sws_getContext(_width, _rows, AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
+		sws_ctx = sws_getContext(_width, _rows, rgba ? AV_PIX_FMT_RGB32 : AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 	}
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
@@ -145,7 +145,69 @@ namespace gpc {
 		frame_num++;
 	}
 
-	void Recorder::close()
+    void Recorder::recordFrameFromRGBA(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
+    {
+        using std::string;
+
+        std::vector<RGBAValue> swap(_width);
+
+        // Initialize video stream packet
+        av_init_packet(&pkt);
+        pkt.data = nullptr;    // packet data will be allocated by the encoder
+        pkt.size = 0;
+        pkt.pts = pkt.dts = 0; // the timestamp does not appear to be necessary when streaming
+
+        RGBAValue *pixels = const_cast<RGBAValue*>(reinterpret_cast<const RGBAValue*>(pixels_));
+
+        if (flip_y) {
+            for (unsigned y = 0; y < _rows / 2; y++) {
+                // Copy "swap" row (from first half)
+                memcpy(&swap[0], &pixels[y * _width], _width * sizeof(RGBAValue));
+                // Copy row in second half to first half
+                memcpy(&pixels[y * _width], &pixels[(_rows - y - 1) * _width], _width * sizeof(RGBAValue));
+                // Copy "swap" row to second half
+                memcpy(&pixels[(_rows - y - 1) * _width], &swap[0], _width * sizeof(RGBAValue));
+            }
+        }
+
+        // Convert pixels to video frame
+        const uint8_t * inData[1] = { reinterpret_cast<const uint8_t*>(pixels) }; // RGB24 have one plane
+        int inLinesize[1] = { 4 * _width }; // RGBA stride
+        if (sws_scale(sws_ctx, inData, inLinesize, 0, _rows, frame->data, frame->linesize) != _rows)
+            throw runtime_error("Software scaling returns incorrect slice height");
+
+        // Example image
+        if (false) {
+            // Y
+            for (int y = 0; y < cctx->height; y++)
+                for (int x = 0; x < cctx->width; x++)
+                    frame->data[0][y * frame->linesize[0] + x] = x + y + frame_num * 3;
+            // Cb and Cr
+            for (int y = 0; y < cctx->height / 2; y++) {
+                for (int x = 0; x < cctx->width / 2; x++) {
+                    frame->data[1][y * frame->linesize[1] + x] = 128 + y + frame_num * 2;
+                    frame->data[2][y * frame->linesize[2] + x] = 64 + x + frame_num * 5;
+                }
+            }
+        }
+
+        // frame->pts = timestamp; // frame_num;
+
+        // Encode the frame
+        int ret = avcodec_encode_video2(cctx, &pkt, frame, &got_output);
+        if (ret < 0) {
+            // throw runtime_error(string("Failed to encode the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
+        }
+        else if (got_output) {
+            avio_write(avio_ctx, pkt.data, pkt.size);
+            av_free_packet(&pkt);
+        }
+
+        // Advance frame counter
+        frame_num++;
+    }
+
+    void Recorder::close()
 	{
 		// Get the delayed frames
 		for (; got_output; frame_num++) {

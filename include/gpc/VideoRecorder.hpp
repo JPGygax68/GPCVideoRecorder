@@ -15,15 +15,16 @@ namespace gpc {
 
 	class Recorder {
 	public:
-		typedef uint8_t RGBValue[3];
-		typedef AVRational FrameRate;
+		typedef uint8_t RGBValue [3];
+        typedef uint8_t RGBAValue[4];
+        typedef AVRational FrameRate;
 
 		explicit Recorder();
 		~Recorder();
 
 		auto setFrameRate(const FrameRate &framerate) -> Recorder &;
 
-		void open(const std::string &filename, unsigned width = 0, unsigned height = 0);
+		void open(const std::string &filename, unsigned width = 0, unsigned height = 0, bool rgba = false);
 
 		void close();
 
@@ -31,6 +32,7 @@ namespace gpc {
 
         //void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
         void recordFrameFromRGB(const void *pixels, bool flip_y = true);
+        void recordFrameFromRGBA(const void *pixels, bool flip_y = true);
 
         //void pause();
         //void resume();
