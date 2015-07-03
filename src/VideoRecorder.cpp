@@ -30,7 +30,7 @@ namespace gpc {
 		return *this;
 	}
 
-	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_, bool rgba)
+	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_, SourceFormat src_fmt_)
 	{
 		using std::string;
         int err = 0;
@@ -80,7 +80,12 @@ namespace gpc {
 
 		got_output = 0;
 
-		sws_ctx = sws_getContext(_width, _rows, rgba ? AV_PIX_FMT_BGR32 : AV_PIX_FMT_RGB24, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
+        switch (src_fmt_) {
+        case RGB: src_fmt = AV_PIX_FMT_RGB24; break;
+        case BGRA: src_fmt = AV_PIX_FMT_BGR32; break;
+        default: throw std::runtime_error("unsupported pixel format");
+        }
+		sws_ctx = sws_getContext(_width, _rows, src_fmt, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 	}
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)

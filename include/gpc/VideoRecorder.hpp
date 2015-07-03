@@ -15,6 +15,11 @@ namespace gpc {
 
 	class Recorder {
 	public:
+        enum SourceFormat {
+            RGB = 1,
+            BGRA = 2
+        };
+
 		typedef uint8_t RGBValue [3];
         typedef uint8_t RGBAValue[4];
         typedef AVRational FrameRate;
@@ -24,13 +29,14 @@ namespace gpc {
 
 		auto setFrameRate(const FrameRate &framerate) -> Recorder &;
 
-		void open(const std::string &filename, unsigned width = 0, unsigned height = 0, bool rgba = false);
+		void open(const std::string &filename, unsigned width = 0, unsigned height = 0, SourceFormat src_fmt = RGB);
 
 		void close();
 
 		auto currentFrameNum() const -> int { return frame_num; }
 
         //void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
+        // TODO: create single method that automatically adapts to source format defined when calling open()
         void recordFrameFromRGB(const void *pixels, bool flip_y = true);
         void recordFrameFromBGRA(const void *pixels, bool flip_y = true);
 
@@ -50,6 +56,7 @@ namespace gpc {
 		//FILE *file;
 		AVFrame *frame;
 		int frame_num;
+        AVPixelFormat src_fmt;
 		SwsContext *sws_ctx;
         AVIOContext *avio_ctx;
 		AVPacket pkt;
