@@ -230,9 +230,9 @@ namespace gpc {
 		avio_write(avio_ctx, endcode, sizeof(endcode)); // VideoLAN doesn't complain when this is absent
         avio_closep(&avio_ctx);
         sws_freeContext(sws_ctx);
-		avcodec_close(cctx);
-		av_free(cctx);
-		av_freep(&frame->data[0]);
+        avcodec_close(cctx);
+        avcodec_free_context(&cctx);
+        av_freep(&frame->data[0]);
 		av_frame_free(&frame);
 	}
 
