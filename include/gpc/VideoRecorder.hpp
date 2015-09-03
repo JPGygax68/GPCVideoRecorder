@@ -33,6 +33,8 @@ namespace gpc {
 
 		void close();
 
+        bool isOpen() const { return channel_open; }
+
 		auto currentFrameNum() const -> int { return frame_num; }
 
         //void recordFrameFromRGB(const void *pixels, int64_t timestamp, bool flip_y = true);
@@ -53,6 +55,7 @@ namespace gpc {
 		AVCodec *codec;
         AVFormatContext *fctx;
 		AVCodecContext *cctx;
+        bool channel_open;
 		//FILE *file;
 		AVFrame *frame;
 		int frame_num;

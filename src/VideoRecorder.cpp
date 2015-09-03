@@ -12,7 +12,7 @@ namespace gpc {
 
     Recorder::Recorder() : 
         framerate({ 1, 25 }),
-        codec(nullptr), fctx(nullptr), cctx(nullptr), avio_ctx(nullptr), sws_ctx(nullptr),
+        codec(nullptr), fctx(nullptr), cctx(nullptr), avio_ctx(nullptr), sws_ctx(nullptr), channel_open(false),
         /*file(nullptr),*/ frame(nullptr), frame_num(-1), got_output(0)
 	{
 		// TODO: is it ok to call av_register_xxx() multiple times ?
@@ -46,7 +46,6 @@ namespace gpc {
 
         cctx = avcodec_alloc_context3(codec);
 		if (!cctx) throw runtime_error("Unabled to allocate codec context");
-		memset(cctx, 0, sizeof(*cctx));
 
 		// The following bit rate settings are intended to allow the codec to do anything it wants
 		cctx->bit_rate = 8 * 3 * _width * _rows * framerate.den / framerate.num / 4;
@@ -86,6 +85,8 @@ namespace gpc {
         default: throw std::runtime_error("unsupported pixel format");
         }
 		sws_ctx = sws_getContext(_width, _rows, src_fmt, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
+
+        channel_open = true;
 	}
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
@@ -231,9 +232,10 @@ namespace gpc {
         avio_closep(&avio_ctx);
         sws_freeContext(sws_ctx);
         avcodec_close(cctx);
-        avcodec_free_context(&cctx);
+        avcodec_free_context(&cctx); // THIS SOMETIMES CRASHES
         av_freep(&frame->data[0]);
 		av_frame_free(&frame);
+        channel_open = false;
 	}
 
 } // ns gpc
