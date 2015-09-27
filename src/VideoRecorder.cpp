@@ -1,6 +1,8 @@
 #include <stdexcept>
 #include <cassert>
 #include <vector>
+#include <iostream> // TODO: remove!
+#include <chrono>
 
 #include "gpc/VideoRecorder.hpp"
 
@@ -32,6 +34,7 @@ namespace gpc {
 
 	void Recorder::open(const std::string &filename, unsigned width_, unsigned rows_, SourceFormat src_fmt_)
 	{
+        const char * CODEC_NAME = "libx264"; // "nvenc"; // "libx264"
 		using std::string;
         int err = 0;
 
@@ -41,30 +44,47 @@ namespace gpc {
 		assert(_width != 0 && _rows != 0);
 
 		// TODO: offer choices
-		codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-		if (!codec) throw runtime_error("Unabled to find H264 encoder");
+		//codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+        codec = avcodec_find_encoder_by_name(CODEC_NAME);
+        if (!codec) throw runtime_error("Unabled to find H264 encoder");
 
         cctx = avcodec_alloc_context3(codec);
 		if (!cctx) throw runtime_error("Unabled to allocate codec context");
 
-		// The following bit rate settings are intended to allow the codec to do anything it wants
-		cctx->bit_rate = 8 * 3 * _width * _rows * framerate.den / framerate.num / 4;
-		cctx->bit_rate_tolerance = cctx->bit_rate / 2;
+        if ((err = avcodec_get_context_defaults3(cctx, codec)) < 0)
+            // throw runtime_error(string("Failed to get codec context defaults:") + av_make_error_string(errbuf, sizeof(errbuf), err));
+            throw runtime_error(string("Failed to get codec context defaults: ") + std::to_string(err));
 
-		cctx->width = _width;
+        // The following bit rate settings are intended to allow the codec to do anything it wants
+		//cctx->bit_rate = 8 * 3 * _width * _rows * framerate.den / framerate.num / 4;
+		//cctx->bit_rate_tolerance = cctx->bit_rate / 2;
+        cctx->width = _width;
 		cctx->height = _rows;
 		cctx->codec_type = AVMEDIA_TYPE_VIDEO;
-		cctx->time_base = framerate;
-		cctx->gop_size = 0; // 10;
-		cctx->max_b_frames = 1;
-		cctx->pix_fmt = AV_PIX_FMT_YUV420P; // TODO: offer choices
+        //cctx->codec_id = codec->id;
+        cctx->pix_fmt = AV_PIX_FMT_YUV420P; // codec->pix_fmts[0]; //AV_PIX_FMT_BGRA; //TODO: offer choices
+        cctx->time_base = framerate;
+		//cctx->gop_size = 0xffffffff; // 0; 10;
+		//cctx->max_b_frames = 1;
 
-		av_opt_set(cctx->priv_data, "preset", "slow", 0); // specific to H264
+        if (strcmp(CODEC_NAME, "libx264") == 0) {
+            // https://trac.ffmpeg.org/wiki/Encode/H.264
+            //av_opt_set(cctx->priv_data, "preset", "slow", 0); // specific to libx264
+            av_opt_set(cctx->priv_data, "preset", "ultrafast", 0); // reduces CPU load by half!
+            av_opt_set(cctx->priv_data, "tune", "zerolatency", 0); // TODO: sometimes close to 0, sometimes not - find out why
+        }
+        else if (strcmp(CODEC_NAME, "nvenc") == 0) {
+            //av_opt_set(cctx->priv_data, "preset", "fast", 0);
+            av_opt_set(cctx->priv_data, "tune", "zerolatency", 0);
+        }
 
-		if (avcodec_open2(cctx, codec, nullptr) < 0) throw runtime_error("Unable to open codec");
+		if ((err = avcodec_open2(cctx, codec, nullptr)) < 0)
+            throw runtime_error(string("Unable to open codec:") + av_make_error_string(errbuf, sizeof(errbuf), err));
+            //throw runtime_error(string("Unable to open codec: ") + std::to_string(err));
 
         if ((err = avio_open(&avio_ctx, filename.c_str(), AVIO_FLAG_WRITE)))
             throw runtime_error(string("Failed to open output stream: ") + av_make_error_string(errbuf, sizeof(errbuf), err));
+            //throw runtime_error(string("Failed to open output stream: ") + std::to_string(err));
 
 		frame = av_frame_alloc();
 		if (!frame) throw runtime_error("Failed to allocate AV frame");
@@ -72,10 +92,9 @@ namespace gpc {
 		frame->width = cctx->width;
 		frame->height = cctx->height;
 
-		err = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 1);
-		if (err < 0) throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), err));
-
-		frame_num = 0;
+		if ((err = av_image_alloc(frame->data, frame->linesize, cctx->width, cctx->height, cctx->pix_fmt, 1)) < 0)
+		    //throw runtime_error(string("Failed to allocate raw picture buffer: ") + av_make_error_string(errbuf, sizeof(errbuf), err));
+            throw runtime_error(string("Failed to allocate raw picture buffer: ") + std::to_string(err));
 
 		got_output = 0;
 
@@ -87,7 +106,10 @@ namespace gpc {
 		sws_ctx = sws_getContext(_width, _rows, src_fmt, _width, _rows, cctx->pix_fmt, 0, 0, 0, 0);
 
         channel_open = true;
-	}
+    
+        last_ts = av_gettime_relative();
+        frame_num = 0;
+    }
 
 	void Recorder::recordFrameFromRGB(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
 	{
@@ -151,9 +173,26 @@ namespace gpc {
 		frame_num++;
 	}
 
+    // PROFILING
+    static std::chrono::high_resolution_clock cpu_timer;
+    static double   total_flipy_time = 0;
+    static uint64_t flipy_count = 0;
+    static double   total_swscale_time = 0;
+    static uint64_t swscale_count = 0;
+    static double   total_encode_time = 0;
+    static uint64_t encode_count = 0;
+    static double   total_write_time = 0;
+    static uint64_t write_count = 0;
+
     void Recorder::recordFrameFromBGRA(const void *pixels_, bool flip_y) // , int64_t timestamp, bool flip_y)
     {
         using std::string;
+        decltype( cpu_timer.now() ) ts_start;
+
+        // Get current timestamp; if less than a full frame period has elapsed since
+        // the last call to this method, don't encode/send the frame
+        int64_t current_ts = av_gettime_relative();
+        //if (current_ts < (last_ts + framerate.num * 1000000 / framerate.den)) return;
 
         std::vector<RGBAValue> swap(_width);
 
@@ -161,11 +200,12 @@ namespace gpc {
         av_init_packet(&pkt);
         pkt.data = nullptr;    // packet data will be allocated by the encoder
         pkt.size = 0;
-        pkt.pts = pkt.dts = 0; // the timestamp does not appear to be necessary when streaming
 
         RGBAValue *pixels = const_cast<RGBAValue*>(reinterpret_cast<const RGBAValue*>(pixels_));
 
         if (flip_y) {
+
+            ts_start = cpu_timer.now();
             for (unsigned y = 0; y < _rows / 2; y++) {
                 // Copy "swap" row (from first half)
                 memcpy(&swap[0], &pixels[y * _width], _width * sizeof(RGBAValue));
@@ -174,13 +214,18 @@ namespace gpc {
                 // Copy "swap" row to second half
                 memcpy(&pixels[(_rows - y - 1) * _width], &swap[0], _width * sizeof(RGBAValue));
             }
+            total_flipy_time += std::chrono::duration_cast<std::chrono::nanoseconds>(cpu_timer.now() - ts_start).count();
+            flipy_count++;
         }
 
         // Convert pixels to video frame
         const uint8_t * inData[1] = { reinterpret_cast<const uint8_t*>(pixels) }; // RGB24 have one plane
         int inLinesize[1] = { 4 * _width }; // RGBA stride
+        ts_start = cpu_timer.now();
         if (sws_scale(sws_ctx, inData, inLinesize, 0, _rows, frame->data, frame->linesize) != _rows)
             throw runtime_error("Software scaling returns incorrect slice height");
+        total_swscale_time += std::chrono::duration_cast<std::chrono::nanoseconds>(cpu_timer.now() - ts_start).count();
+        swscale_count++;
 
         // Example image
         if (false) {
@@ -197,20 +242,27 @@ namespace gpc {
             }
         }
 
-        // frame->pts = timestamp; // frame_num;
+        frame->pts = frame_num; // * 90000 / 25;
 
         // Encode the frame
+        ts_start = cpu_timer.now();
         int ret = avcodec_encode_video2(cctx, &pkt, frame, &got_output);
+        total_encode_time += std::chrono::duration_cast<std::chrono::nanoseconds>(cpu_timer.now() - ts_start).count();
+        encode_count++;
         if (ret < 0) {
             // throw runtime_error(string("Failed to encode the frame: ") + av_make_error_string(errbuf, sizeof(errbuf), ret));
         }
         else if (got_output) {
+            ts_start = cpu_timer.now();
             avio_write(avio_ctx, pkt.data, pkt.size);
+            total_write_time += std::chrono::duration_cast<std::chrono::nanoseconds>(cpu_timer.now() - ts_start).count();
+            write_count++;
             av_free_packet(&pkt);
         }
 
-        // Advance frame counter
+        // Advance frame counter and record timestamp
         frame_num++;
+        last_ts = current_ts;
     }
 
     void Recorder::close()
@@ -236,6 +288,12 @@ namespace gpc {
         av_freep(&frame->data[0]);
 		av_frame_free(&frame);
         channel_open = false;
-	}
+
+        // PROFILING
+        std::cout << "Average flip Y duration [ns] : " << total_flipy_time   / flipy_count   << std::endl;
+        std::cout << "Average swscale duration [ns]: " << total_swscale_time / swscale_count << std::endl;
+        std::cout << "Average encode duration [ns] : " << total_encode_time  / encode_count  << std::endl;
+        std::cout << "Average write duration [ns]  : " << total_write_time   / write_count   << std::endl;
+    }
 
 } // ns gpc
