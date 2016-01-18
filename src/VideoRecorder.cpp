@@ -2,7 +2,7 @@
 #include <cassert>
 #include <vector>
 
-#include "gpc/VideoRecorder.hpp"
+#include <gpc/VideoRecorder.hpp>
 
 using std::runtime_error;
 

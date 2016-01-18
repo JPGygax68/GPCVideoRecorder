@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.0)
 # Project + basics
 #
 
-project(GPCVideoRecorder)
+project(libGPCVideoRecorder)
 
 set(LSApplication_MAJOR_VERSION 0)
 set(LSApplication_MINOR_VERSION 1)
@@ -15,8 +15,8 @@ set(LSApplication_VERSION ${${PROJECT_NAME}_MAJOR_VERSION}.${${PROJECT_NAME}_MIN
 # Special settings
 #
 
+if (0)
 # Force static runtime libraries
-
 FOREACH(flag
   CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO
   CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_DEBUG_INIT
@@ -25,6 +25,7 @@ FOREACH(flag
   STRING(REPLACE "/MD"  "/MT" "${flag}" "${${flag}}")
   SET("${flag}" "${${flag}} /EHsc")
 ENDFOREACH()
+endif()
  
 #-----------------------------------------------
 # Installation paths
@@ -81,30 +82,38 @@ set_target_properties( ${PROJECT_NAME}
 
 # FFMPEG library
 
-# This search only works if the .lib and .h files have been installed in "sensible" locations
-# below one of the directories listed in the env variable CMAKE_PREFIX_PATH
+if (CMAKE_SIZEOF_VOID_P MATCHES 8)
+	set( PROJECT_ARCH "x86_64" )
+else(CMAKE_SIZEOF_VOID_P MATCHES 8)
+	set( PROJECT_ARCH "x86" )
+endif(CMAKE_SIZEOF_VOID_P MATCHES 8)
 
-find_library(avformat_LIB avformat)
-find_path(avformat_INCLUDE libavformat/avformat.h)
-find_library(avcodec_LIB avcodec)
-find_path(avcodec_INCLUDE libavcodec/avcodec.h)
-find_library(avutil_LIB avutil)
-find_path(avutil_INCLUDE libavutil/avutil.h)
-find_library(swscale_LIB swscale)
-find_path(swscale_INCLUDE libswscale/swscale.h)
+set(FFmpeg_ROOT "" CACHE PATH "Root of FFmpeg library (libAV)")
 
-target_link_libraries(${PROJECT_NAME} ${avformat_LIB} ${avcodec_LIB} ${avutil_LIB} ${swscale_LIB})
-target_include_directories(${PROJECT_NAME} PUBLIC ${avformat_INCLUDE} ${avcodec_INCLUDE} ${avutil_INCLUDE} ${swscale_INCLUDE})
-target_compile_definitions(${PROJECT_NAME} PRIVATE __STDC_CONSTANT_MACROS)
+foreach (lib "avformat" "avcodec" "avutil" "swscale")
 
-# Requires disabling of "SAFESEH"
-get_target_property(link_flags ${PROJECT_NAME} LINK_FLAGS)
-if (NOT link_flags)
-  set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/SAFESEH:NO")
-else()
-  set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "${link_flags} /SAFESEH:NO")
-endif()
-get_target_property(link_flags ${PROJECT_NAME} LINK_FLAGS)
+	# Library files
+	find_library(${lib}_LIB_RELEASE "${lib}" PATHS ${FFmpeg_ROOT}/lib/${PROJECT_ARCH} ${FFmpeg_ROOT}/lib)
+	if (NOT ${lib}_LIB_RELEASE)
+		message(FATAL_ERROR "Could not find release version of library \"${lib}\"")
+	endif()
+	find_library(${lib}_LIB_DEBUG "${lib}" PATH ${FFmpeg_ROOT}/lib/${PROJECT_ARCH} ${FFmpeg_ROOT}/lib)
+	if (NOT ${lib}_LIB_DEBUG)
+		message(FATAL_ERROR "Could not find debug version of library \"${lib}\"")
+	endif()
+	target_link_libraries(${PROJECT_NAME} PUBLIC 
+		$<$<CONFIG:Release>:${${lib}_LIB_RELEASE}>
+		$<$<CONFIG:Debug>:${${lib}_LIB_DEBUG}>
+	)
+
+	# Header file
+	find_path(${lib}_INCLUDE "lib${lib}/${lib}.h" PATHS ${FFmpeg_ROOT}/include)
+	if (NOT ${lib}_INCLUDE)
+		message(FATAL_ERROR "Could not find header file of library \"${lib}\"")
+	endif()
+	target_include_directories(${PROJECT_NAME} PRIVATE ${${lib}_INCLUDE})
+	
+endforeach()
 
 #------------------------------------------------
 # Exporting
